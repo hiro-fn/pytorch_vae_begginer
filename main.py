@@ -15,25 +15,42 @@ image_size = 82
 batch_size = 16
 
 
-def make_transform():
+def make_transform(is_train):
     mean = (0.5, 0.5, 0.5)
     std = (0.5, 0.5, 0.5)
-    return tf.Compose([
-        tf.Resize((image_size, image_size)),
-        tf.RandomHorizontalFlip(),
+
+
+    if is_train:
+        image_process = [
+            tf.RandomHorizontalFlip(),
+            tf.RandomVerticalFlip(),
+            tf.RandomGrayscale(0.3),
+            tf.RandomCrop(82),
+            tf.Resize((image_size, image_size)),
+        ]
+    else:
+        image_process = [
+            tf.Resize((image_size, image_size)),
+        ]
+
+
+    to_tensor_process = [
         tf.ToTensor(),
         tf.Normalize(mean, std)
-    ])
+    ]
+
+    process = []
+    process.extend(image_process)
+    process.extend(to_tensor_process)
+
+    return tf.Compose(process)
 
 
-def set_dataset(transform):
-    trainset = torchvision.datasets.ImageFolder(
-        root='data/train', transform=transform)
+def set_dataset(transform, root):
+    dataset = torchvision.datasets.ImageFolder(
+        root=root, transform=transform)
 
-    testset = torchvision.datasets.ImageFolder(
-        root='data/val', transform=transform)
-
-    return trainset, testset
+    return dataset
 
 
 def load_dataset(dataset, shuffle: bool, batch_size: int, num_workers=4):
@@ -93,10 +110,12 @@ def run_test(net, epoch, test_loader):
 
 
 def main():
-    transform = make_transform()
-    train_set, test_set = set_dataset(transform)
+    train_transform = make_transform(True)
+    test_transform = make_transform(False)
+    train_set = set_dataset(train_transform, 'data/train')
+    test_set = set_dataset(test_transform, 'data/val')
 
-    epoch = 200
+    epoch = 1000
     train_loader = load_dataset(train_set, batch_size=batch_size, shuffle=True)
     test_loader = load_dataset(test_set, batch_size=batch_size, shuffle=False)
 
@@ -107,7 +126,9 @@ def main():
     loss = 0.0
     for epoch in tqdm(range(epoch)):
         loss = run_train(net, epoch, optimizer, train_loader)
-        run_test(net, epoch, test_loader)
+
+        if epoch % 10 == 0:
+            run_test(net, epoch, test_loader)
 
         loss += loss.item()
 
